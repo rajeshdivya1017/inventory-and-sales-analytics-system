@@ -1,0 +1,48 @@
+1. Walk through the complete flow when a manager adds a sale. From the form submit button to the updated dashboard revenue — name every layer that is involved in order.
+
+	1.When a manager adds a sale, the flow starts from the Sale Form. The manager selects the product, enters the quantity, and clicks the Submit button.
+	2.The form is handled using React Hook Form, and Zod SaleSchema validates the form data before submitting it. It checks that the required values are valid and that the quantity is a positive integer.
+	3.After validation, the form data reaches the handleSubmit function in SalesPage. From there, I call the useCreateSale mutation.
+	4.The useCreateSale hook uses TanStack Query's useMutation. It calls the createSale function from api/sales.ts.
+	5.The createSale function sends a POST request to the /api/sales endpoint through Axios. The Axios request interceptor adds the logged-in manager's JWT access token to the request.
+	6.The Flask backend receives the request, verifies the JWT, identifies the logged-in seller, validates the sale and available stock, reduces the product stock, takes the current product price as the unit price, calculates the total amount, and saves the sale in MySQL.
+	7.After the sale is successfully created, useCreateSale invalidates the sales, products, and analytics queries.
+	8.TanStack Query then fetches the latest analytics data. The useKPIs hook gets the updated revenue from the analytics API.
+	9.Finally, the updated KPI data is shown in the dashboard KPI cards, and the related charts also update.
+	10.So the complete flow is SaleForm → React Hook Form + Zod → SalesPage → useCreateSale → createSale API → Axios + JWT → Flask 	backend → MySQL → TanStack Query invalidation → Analytics API → Dashboard KPI cards and charts.
+
+
+
+2. In your useAnalytics hooks, you include filter values in the query key. What happens in TanStack Query when the category filter changes?
+
+	1.In my useAnalytics hooks, I include the filter values in the TanStack Query query key because the analytics result depends on those filters.
+	2.When the user changes the category filter, the filter value changes and the query key also changes.
+	3.TanStack Query considers this as a different query and fetches the analytics data for the newly selected category.
+	4.It also manages the result in its cache based on the new query key. So different filter combinations can have different cached results.
+	5.Because of this, when I change the category filter, the KPI cards and charts automatically get the analytics data for the new category without manually calling the API using useEffect.
+	6.So the query key helps TanStack Query know that the required data has changed and that it needs to fetch or use the correct cached data for that filter.
+
+
+
+3. You have two Zustand stores — useFilterStore and useUIStore. Why separate them instead of one big store?
+
+	1.I separated useFilterStore and useUIStore because they are responsible for different types of state.
+	2.useFilterStore manages data-related filters such as category, product, seller, from date, to date, search, and reset filters. These values are mainly used for filtering products, sales, and analytics data.
+	3.useUIStore manages user interface state such as sidebar open or closed state, light and dark theme, and toast messages.
+	4.I could keep all of these inside one Zustand store, but then different responsibilities would be mixed together. As the application grows, that would make the store harder to understand and maintain.
+	5.By separating them, each store has a clear responsibility. If I need to change filtering logic, I work with useFilterStore. If I need to change theme, sidebar, or toast behavior, I work with useUIStore.
+	6.So I separated them to keep the state organized and make the code easier to maintain.
+
+
+
+4. Your Zod SaleSchema validates that quantity is a positive integer. But the backend also validates that quantity <= stock. Why do you need BOTH checks — frontend and backend?
+
+       1.I need both frontend and backend validation because they have different purposes.
+       2.The frontend validation using Zod gives immediate feedback to the manager. For example, if the manager enters zero, a negative number, or a non-integer quantity, the form can show the error immediately without sending an invalid request to the backend.
+       3.But frontend validation cannot be fully trusted because someone can bypass the React application and directly call the backend API using Postman or another client.
+      4.That's why the backend also validates the quantity and checks the actual stock available in the database.
+For example:
+===========
+	 if a product has only 5 items in stock and someone sends a request to create a sale for 10 items directly through the API, the backend must reject that request.
+	So frontend validation is mainly for user experience and immediate feedback, while backend validation protects the application, database, and business rules.
+	That is why both checks are necessary. The frontend helps the user enter valid data, and the backend provides the final validation and protects the actual data.
